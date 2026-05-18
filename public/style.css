@@ -36,7 +36,78 @@
   --radius-md: 4px;
   --radius-lg: 8px;
   --radius-xl: 12px;
+
+  color-scheme: light;
 }
+
+[data-theme="dark"] {
+  --brand-blue: #4c8bf5;
+  --brand-blue-dark: #3b73d4;
+  --brand-navy: #0b0f17;
+  --cta-orange: #FB641B;
+  --cta-orange-hover: #ff7a3a;
+  --cta-yellow: #FFC200;
+  --accent-amber: #FF9F00;
+  --success: #66BB6A;
+  --success-bg: rgba(102,187,106,0.12);
+  --danger: #ef5350;
+  --warning: #ffa726;
+
+  --bg-page: #0f1115;
+  --bg-card: #1a1d24;
+  --bg-soft: #21252e;
+  --bg-strip: #14171d;
+
+  --text-primary: #e6e8ee;
+  --text-secondary: #b6bac5;
+  --text-muted: #8b91a0;
+
+  --border: #2a2f3a;
+  --border-strong: #3a4150;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.5);
+  --shadow-lg: 0 6px 20px rgba(0,0,0,0.6);
+
+  color-scheme: dark;
+}
+
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-textarea {
+  background: var(--bg-soft);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .form-select option {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .priority-chip { background: var(--bg-soft); }
+[data-theme="dark"] .priority-chip.active { color: #fff; }
+
+[data-theme="dark"] .material-row { background: var(--bg-soft); }
+[data-theme="dark"] .addon-card { background: var(--bg-soft); }
+[data-theme="dark"] .addon-card.active { background: rgba(102,187,106,0.10); }
+[data-theme="dark"] .summary-card { background: var(--bg-card); }
+[data-theme="dark"] .summary-row { border-bottom-color: var(--border); }
+
+[data-theme="dark"] .toast { background: var(--bg-card); color: var(--text-primary); }
+[data-theme="dark"] .toast.success { color: var(--success); }
+[data-theme="dark"] .toast.error { color: var(--danger); }
+[data-theme="dark"] .toast.info { color: var(--brand-blue); }
+
+[data-theme="dark"] .modal { background: var(--bg-card); }
+[data-theme="dark"] .btn-modal { background: var(--bg-soft); color: var(--text-primary); }
+[data-theme="dark"] .btn-modal:hover { background: var(--bg-card); }
+
+[data-theme="dark"] .history-panel { background: var(--bg-card); }
+[data-theme="dark"] .history-item { background: var(--bg-soft); }
+[data-theme="dark"] .btn-remove { background: var(--bg-soft); }
+[data-theme="dark"] .btn-remove:hover { background: rgba(239,83,80,0.18); }
+[data-theme="dark"] .btn-add { background: transparent; }
+[data-theme="dark"] .btn-add:hover { background: rgba(76,139,245,0.12); }
 
 body {
   font-family: 'Inter', Roboto, Arial, sans-serif;

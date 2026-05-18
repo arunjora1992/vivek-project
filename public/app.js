@@ -22,8 +22,26 @@ document.addEventListener("DOMContentLoaded", () => {
   setupMaterialToggles();
   setupAddons();
   setDefaultDateTime();
+  syncThemeButton();
   renderSummary();
 });
+
+// ─── THEME ───
+function syncThemeButton() {
+  const btn = document.getElementById("themeBtn");
+  if (!btn) return;
+  const theme = document.documentElement.getAttribute("data-theme") || "light";
+  btn.textContent = theme === "dark" ? "☀️" : "🌙";
+  btn.title = theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") || "light";
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("skt_theme", next);
+  syncThemeButton();
+}
 
 function setDefaultDateTime() {
   const now = new Date();
