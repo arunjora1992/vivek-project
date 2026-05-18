@@ -37,9 +37,11 @@ function setDefaultDateTime() {
 
 function setupPriorityChips() {
   document.querySelectorAll(".priority-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-      chip.classList.toggle("active");
-      chip.querySelector("input").checked = chip.classList.contains("active");
+    chip.addEventListener("click", (e) => {
+      e.preventDefault();
+      const input = chip.querySelector("input");
+      input.checked = !input.checked;
+      chip.classList.toggle("active", input.checked);
       renderSummary();
     });
   });
