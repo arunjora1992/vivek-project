@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: skt-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: skt
+      POSTGRES_PASSWORD: skt
+      POSTGRES_DB: skt_orders
+    volumes:
+      - skt_pgdata:/var/lib/postgresql/data
+      - ./server/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skt -d skt_orders"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: skt-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: skt
+      PGPASSWORD: skt
+      PGDATABASE: skt_orders
+      PORT: 3000
+    ports:
+      - "3000:3000"
+
+volumes:
+  skt_pgdata:

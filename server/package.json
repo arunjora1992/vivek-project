@@ -1,0 +1,15 @@
+{
+  "name": "skt-order-book-server",
+  "version": "1.0.0",
+  "description": "Backend API for SKT Order Book with PostgreSQL persistence and PDF export.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "pdfkit": "^0.15.0",
+    "pg": "^8.12.0"
+  }
+}

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SKT Order Book - Professional construction materials ordering system for cement and steel">
+  <title>SKT Order Book</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="app-header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">S</div>
+      <div class="logo-text">
+        <h1>SKT Order Book</h1>
+        <p>Construction Materials</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" onclick="toggleHistory()" title="Order History" id="historyBtn">📋</button>
+      <button class="btn-icon" onclick="confirmReset()" title="Clear Form" id="clearBtn">🗑️</button>
+    </div>
+  </div>
+</header>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- MAIN CONTENT -->
+<main class="main-container">
+
+  <!-- SECTION 1: PARTY DETAILS -->
+  <div class="section-card" id="partySection">
+    <div class="section-header">
+      <div class="section-icon blue">👤</div>
+      <div>
+        <div class="section-title">Party Details</div>
+        <div class="section-subtitle">Customer information</div>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label" for="partyName">Party Name <span class="required">*</span></label>
+        <input type="text" class="form-input" id="partyName" placeholder="Enter party name" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="mobile">Mobile <span class="required">*</span></label>
+        <input type="tel" class="form-input" id="mobile" placeholder="10-digit mobile" maxlength="10" autocomplete="tel">
+      </div>
+      <div class="form-group full-width">
+        <label class="form-label" for="address">Delivery Address <span class="required">*</span></label>
+        <textarea class="form-textarea" id="address" placeholder="Enter full delivery address" rows="2"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2: DELIVERY SCHEDULE -->
+  <div class="section-card" id="deliverySection">
+    <div class="section-header">
+      <div class="section-icon purple">📅</div>
+      <div>
+        <div class="section-title">Delivery Schedule</div>
+        <div class="section-subtitle">When and how to deliver</div>
+      </div>
+    </div>
+    <div class="form-grid cols-3">
+      <div class="form-group">
+        <label class="form-label" for="deliveryDate">Date <span class="required">*</span></label>
+        <input type="date" class="form-input" id="deliveryDate">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="deliveryTime">Time</label>
+        <input type="time" class="form-input" id="deliveryTime">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Priority <span class="required">*</span></label>
+        <div class="priority-group">
+          <label class="priority-chip" data-value="Normal">
+            <input type="checkbox"> 🟢 Normal
+          </label>
+          <label class="priority-chip" data-value="Urgent">
+            <input type="checkbox"> 🟡 Urgent
+          </label>
+          <label class="priority-chip" data-value="VIP">
+            <input type="checkbox"> 🔴 VIP
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: CEMENT -->
+  <div class="section-card" id="cementSection">
+    <div class="section-header">
+      <div class="section-icon teal">🧱</div>
+      <div>
+        <div class="section-title">Cement</div>
+        <div class="section-subtitle">Add cement items to this order</div>
+      </div>
+    </div>
+    <div class="material-toggle" id="cementToggle">
+      <span>🧱 Enable Cement</span>
+      <div class="toggle-switch"></div>
+    </div>
+    <div class="material-items" id="cementItems">
+      <div id="cementItemsList"></div>
+      <button class="btn-add" onclick="addCementRow()">+ Add Cement Item</button>
+    </div>
+  </div>
+
+  <!-- SECTION 4: STEEL -->
+  <div class="section-card" id="steelSection">
+    <div class="section-header">
+      <div class="section-icon amber">🔩</div>
+      <div>
+        <div class="section-title">Steel</div>
+        <div class="section-subtitle">Add steel items to this order</div>
+      </div>
+    </div>
+    <div class="material-toggle" id="steelToggle">
+      <span>🔩 Enable Steel</span>
+      <div class="toggle-switch"></div>
+    </div>
+    <div class="material-items" id="steelItems">
+      <div id="steelItemsList"></div>
+      <button class="btn-add" onclick="addSteelRow()">+ Add Steel Item</button>
+    </div>
+  </div>
+
+  <!-- SECTION 5: ADD-ONS -->
+  <div class="section-card" id="addonsSection">
+    <div class="section-header">
+      <div class="section-icon green">📦</div>
+      <div>
+        <div class="section-title">Add-ons</div>
+        <div class="section-subtitle">Optional extra items</div>
+      </div>
+    </div>
+    <div class="addon-grid">
+      <div class="addon-card" data-name="Cover Box" data-key="cb">
+        <div class="addon-card-header">
+          <span class="addon-emoji">📦</span>
+          <span>Cover Box</span>
+        </div>
+        <div class="addon-fields">
+          <div class="form-group">
+            <label class="form-label">Qty</label>
+            <input type="number" class="form-input" placeholder="0" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rate (₹)</label>
+            <input type="number" class="form-input" placeholder="0" min="0">
+          </div>
+        </div>
+      </div>
+      <div class="addon-card" data-name="VNC Wire" data-key="vw">
+        <div class="addon-card-header">
+          <span class="addon-emoji">🔗</span>
+          <span>VNC Wire</span>
+        </div>
+        <div class="addon-fields">
+          <div class="form-group">
+            <label class="form-label">Qty</label>
+            <input type="number" class="form-input" placeholder="0" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rate (₹)</label>
+            <input type="number" class="form-input" placeholder="0" min="0">
+          </div>
+        </div>
+      </div>
+      <div class="addon-card" data-name="Concrete Pai" data-key="cp">
+        <div class="addon-card-header">
+          <span class="addon-emoji">🪣</span>
+          <span>Concrete Pai</span>
+        </div>
+        <div class="addon-fields">
+          <div class="form-group">
+            <label class="form-label">Qty</label>
+            <input type="number" class="form-input" placeholder="0" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rate (₹)</label>
+            <input type="number" class="form-input" placeholder="0" min="0">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 6: NOTES -->
+  <div class="section-card" id="notesSection">
+    <div class="section-header">
+      <div class="section-icon blue">📝</div>
+      <div>
+        <div class="section-title">Notes</div>
+        <div class="section-subtitle">Any special instructions</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <textarea class="form-textarea" id="notes" placeholder="E.g. Call before delivery, gate code 1234, unload near back entrance..." rows="3"></textarea>
+    </div>
+  </div>
+
+  <!-- SECTION 7: ORDER SUMMARY -->
+  <div class="section-card summary-card" id="summarySection">
+    <div class="section-header">
+      <div class="section-icon green">📊</div>
+      <div>
+        <div class="section-title">Order Summary</div>
+        <div class="section-subtitle">Live calculation</div>
+      </div>
+    </div>
+    <div class="summary-items" id="summaryItems">
+      <div class="empty-summary">Add items to see the summary</div>
+    </div>
+  </div>
+
+  <!-- SUBMIT BUTTONS -->
+  <div class="submit-section">
+    <button class="btn-submit" id="submitBtn" onclick="submitOrder()">
+      <span class="btn-text">📤 Submit Order</span>
+      <div class="spinner"></div>
+    </button>
+    <button class="btn-submit" id="lastPdfBtn" style="display:none;margin-top:10px;background:#444" onclick="downloadLastPdf()">
+      <span class="btn-text">📄 Download Last Order as PDF</span>
+    </button>
+  </div>
+
+</main>
+
+<!-- RESET MODAL -->
+<div class="modal-overlay" id="resetModal">
+  <div class="modal">
+    <h2>🗑️ Clear Form?</h2>
+    <p>This will reset all fields. Your submitted orders are safe in the database.</p>
+    <div class="modal-actions">
+      <button class="btn-modal" onclick="closeModal()">Cancel</button>
+      <button class="btn-modal primary" onclick="doReset()">Clear Form</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY PANEL -->
+<div class="history-backdrop" id="historyBackdrop" onclick="toggleHistory()"></div>
+<div class="history-panel" id="historyPanel">
+  <div class="history-header">
+    <h2>📋 Recent Orders</h2>
+    <button class="btn-icon" onclick="toggleHistory()">✕</button>
+  </div>
+  <div class="history-list" id="historyList"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
