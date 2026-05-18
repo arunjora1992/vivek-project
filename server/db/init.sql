@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS orders (
     priorities      TEXT[] NOT NULL DEFAULT '{}',
     notes           TEXT,
     grand_total     NUMERIC(14,2) NOT NULL DEFAULT 0,
+    delivered       BOOLEAN NOT NULL DEFAULT FALSE,
+    delivered_at    TIMESTAMPTZ,
     raw             JSONB NOT NULL
 );
 

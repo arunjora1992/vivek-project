@@ -280,9 +280,10 @@ body {
 
 .logo-text p {
   font-size: 11px;
-  color: var(--cta-yellow);
+  color: rgba(255, 255, 255, 0.82);
   font-weight: 500;
-  font-style: italic;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
 }
 
 .header-actions { display: flex; gap: 10px; }
@@ -879,6 +880,72 @@ body {
   padding: 6px 12px;
   font-size: 11px;
   margin-top: 8px;
+}
+
+.history-item.delivered {
+  border-left: 3px solid var(--success);
+  background: linear-gradient(90deg, var(--success-bg) 0%, var(--bg-card) 60%);
+}
+
+.history-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.delivery-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.delivery-toggle input { display: none; }
+
+.delivery-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 12px;
+  background: #BDBDBD;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.delivery-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: left 0.2s;
+}
+
+.delivery-toggle input:checked + .delivery-switch { background: var(--success); }
+.delivery-toggle input:checked + .delivery-switch::after { left: 18px; }
+
+.delivery-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.delivery-toggle input:checked ~ .delivery-label { color: var(--success); }
+
+.hi-delivered-at {
+  font-size: 11px;
+  color: var(--success);
+  margin-top: 4px;
+  font-weight: 600;
 }
 
 .history-backdrop {

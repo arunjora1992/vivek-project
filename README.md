@@ -45,6 +45,7 @@ Construction-materials ordering app (cement, steel, add-ons) with a marketplace-
 | GET    | `/api/orders/:id/pdf`      | Download the order as a PDF                   |
 | GET    | `/api/orders/export.csv`   | Download the entire order history as CSV      |
 | GET    | `/api/orders/export.pdf`   | Download the entire order history as a PDF report |
+| PATCH  | `/api/orders/:id/delivered`| Mark an order as delivered / not delivered (`{ "delivered": true }`) |
 
 `POST /api/orders` body:
 
@@ -142,6 +143,12 @@ From the history panel, "Export CSV" and "Export PDF" download the **entire orde
 - **PDF** (`/api/orders/export.pdf`) — landscape A4 tabular report with auto-pagination and a grand-total of grand-totals at the end.
 
 The PDF includes party details, delivery schedule, priority, cement/steel/add-on line items, notes, and the grand total.
+
+## Delivery status
+
+Each row in the history panel has a toggle switch to mark the order as **Delivered** or **Pending**. Toggling calls `PATCH /api/orders/:id/delivered`, which updates `orders.delivered` and stamps `orders.delivered_at`. Delivered rows get a green left accent in the panel.
+
+The `delivered` and `delivered_at` columns are added automatically on server start via an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` migration, so existing database volumes don't need to be re-initialised.
 
 ## Theming
 

@@ -367,6 +367,41 @@ function downloadHistoryPdf() {
   window.open(`${API_BASE}/api/orders/export.pdf`, "_blank");
 }
 
+async function toggleDelivered(id, checked) {
+  const item = document.getElementById(`history-${id}`);
+  const input = item?.querySelector(".delivery-toggle input");
+  try {
+    const res = await fetch(`${API_BASE}/api/orders/${encodeURIComponent(id)}/delivered`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delivered: !!checked }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (item) {
+      item.classList.toggle("delivered", !!data.delivered);
+      const labelEl = item.querySelector(".delivery-label");
+      if (labelEl) labelEl.textContent = data.delivered ? "Delivered" : "Pending";
+      let stamp = item.querySelector(".hi-delivered-at");
+      if (data.delivered) {
+        const when = new Date(data.delivered_at).toLocaleString("en-IN");
+        if (!stamp) {
+          stamp = document.createElement("p");
+          stamp.className = "hi-delivered-at";
+          item.querySelector("button.btn-add").insertAdjacentElement("beforebegin", stamp);
+        }
+        stamp.textContent = `✅ ${when}`;
+      } else if (stamp) {
+        stamp.remove();
+      }
+    }
+    showToast(data.delivered ? "Marked as delivered" : "Marked as pending", "success");
+  } catch (e) {
+    if (input) input.checked = !checked;
+    showToast("Failed to update: " + e.message, "error");
+  }
+}
+
 function resetForm() {
   document.getElementById("partyName").value = "";
   document.getElementById("mobile").value = "";
@@ -427,15 +462,30 @@ async function renderHistory() {
       list.innerHTML = `<div class="empty-summary">No orders yet</div>`;
       return;
     }
-    list.innerHTML = orders.map(o => `
-      <div class="history-item">
-        <span class="hi-id">${o.id}</span>
-        <h4>${o.party_name}</h4>
-        <p>📱 ${o.mobile} | 📅 ${o.delivery_date?.split("T")[0]} ${o.delivery_time || ""}</p>
-        <p>Total: ₹${Number(o.grand_total).toLocaleString("en-IN")}</p>
-        <button class="btn-add" style="margin-top:6px" onclick="downloadOrderPdf('${o.id}')">📄 Download PDF</button>
-      </div>
-    `).join("");
+    list.innerHTML = orders.map(o => {
+      const delivered = !!o.delivered;
+      const deliveredAt = o.delivered_at
+        ? new Date(o.delivered_at).toLocaleString("en-IN")
+        : "";
+      return `
+        <div class="history-item ${delivered ? "delivered" : ""}" id="history-${o.id}">
+          <div class="history-item-top">
+            <span class="hi-id">${o.id}</span>
+            <label class="delivery-toggle" title="Toggle delivered">
+              <input type="checkbox" ${delivered ? "checked" : ""}
+                onchange="toggleDelivered('${o.id}', this.checked)">
+              <span class="delivery-switch"></span>
+              <span class="delivery-label">${delivered ? "Delivered" : "Pending"}</span>
+            </label>
+          </div>
+          <h4>${o.party_name}</h4>
+          <p>📱 ${o.mobile} | 📅 ${o.delivery_date?.toString().split("T")[0]} ${o.delivery_time || ""}</p>
+          <p>Total: ₹${Number(o.grand_total).toLocaleString("en-IN")}</p>
+          ${delivered ? `<p class="hi-delivered-at">✅ ${deliveredAt}</p>` : ""}
+          <button class="btn-add" style="margin-top:6px" onclick="downloadOrderPdf('${o.id}')">📄 Download PDF</button>
+        </div>
+      `;
+    }).join("");
   } catch (e) {
     list.innerHTML = `<div class="empty-summary">Failed to load: ${e.message}</div>`;
   }
