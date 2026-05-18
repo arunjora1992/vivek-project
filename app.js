@@ -11,8 +11,6 @@ const CEMENT_TYPES = ["OPC 53", "OPC 43", "PPC", "PSC"];
 const STEEL_BRANDS = ["Apollo", "Tata Tiscon", "JSW Neosteel", "SAIL", "Kamachi", "Rathi"];
 const STEEL_SIZES = ["8mm", "10mm", "12mm", "16mm", "20mm", "25mm", "32mm"];
 
-let cementEnabled = false;
-let steelEnabled = false;
 let cementItems = [];
 let steelItems = [];
 let orderHistory = JSON.parse(localStorage.getItem("skt_orders") || "[]");
@@ -20,9 +18,10 @@ let orderHistory = JSON.parse(localStorage.getItem("skt_orders") || "[]");
 // ─── INIT ───
 document.addEventListener("DOMContentLoaded", () => {
   setupPriorityChips();
-  setupMaterialToggles();
   setupAddons();
   setDefaultDateTime();
+  addCementRow();
+  addSteelRow();
   renderSummary();
 });
 
@@ -45,25 +44,6 @@ function setupPriorityChips() {
       chip.querySelector("input").checked = chip.classList.contains("active");
       renderSummary();
     });
-  });
-}
-
-// ─── MATERIAL TOGGLES ───
-function setupMaterialToggles() {
-  document.getElementById("cementToggle").addEventListener("click", () => {
-    cementEnabled = !cementEnabled;
-    document.getElementById("cementToggle").classList.toggle("active", cementEnabled);
-    document.getElementById("cementItems").classList.toggle("visible", cementEnabled);
-    if (cementEnabled && cementItems.length === 0) addCementRow();
-    renderSummary();
-  });
-
-  document.getElementById("steelToggle").addEventListener("click", () => {
-    steelEnabled = !steelEnabled;
-    document.getElementById("steelToggle").classList.toggle("active", steelEnabled);
-    document.getElementById("steelItems").classList.toggle("visible", steelEnabled);
-    if (steelEnabled && steelItems.length === 0) addSteelRow();
-    renderSummary();
   });
 }
 
@@ -171,38 +151,34 @@ function renderSummary() {
   let grandTotal = 0;
 
   // Cement
-  if (cementEnabled) {
-    document.querySelectorAll("[id^='cement-']").forEach(row => {
-      const selects = row.querySelectorAll("select");
-      const inputs = row.querySelectorAll("input[type='number']");
-      const brand = selects[0]?.value;
-      const type = selects[1]?.value;
-      const qty = parseFloat(inputs[0]?.value) || 0;
-      const rate = parseFloat(inputs[1]?.value) || 0;
-      if (brand && qty > 0 && rate > 0) {
-        const amt = qty * rate;
-        grandTotal += amt;
-        items.push({ label: `🧱 ${brand} ${type}`, detail: `${qty} bags × ₹${rate}`, amount: amt });
-      }
-    });
-  }
+  document.querySelectorAll("[id^='cement-']").forEach(row => {
+    const selects = row.querySelectorAll("select");
+    const inputs = row.querySelectorAll("input[type='number']");
+    const brand = selects[0]?.value;
+    const type = selects[1]?.value;
+    const qty = parseFloat(inputs[0]?.value) || 0;
+    const rate = parseFloat(inputs[1]?.value) || 0;
+    if (brand && qty > 0 && rate > 0) {
+      const amt = qty * rate;
+      grandTotal += amt;
+      items.push({ label: `🧱 ${brand} ${type}`, detail: `${qty} bags × ₹${rate}`, amount: amt });
+    }
+  });
 
   // Steel
-  if (steelEnabled) {
-    document.querySelectorAll("[id^='steel-']").forEach(row => {
-      const selects = row.querySelectorAll("select");
-      const inputs = row.querySelectorAll("input[type='number']");
-      const brand = selects[0]?.value;
-      const size = selects[1]?.value;
-      const qty = parseFloat(inputs[0]?.value) || 0;
-      const rate = parseFloat(inputs[1]?.value) || 0;
-      if (brand && qty > 0 && rate > 0) {
-        const amt = qty * rate;
-        grandTotal += amt;
-        items.push({ label: `🔩 ${brand} ${size}`, detail: `${qty} ton × ₹${rate}`, amount: amt });
-      }
-    });
-  }
+  document.querySelectorAll("[id^='steel-']").forEach(row => {
+    const selects = row.querySelectorAll("select");
+    const inputs = row.querySelectorAll("input[type='number']");
+    const brand = selects[0]?.value;
+    const size = selects[1]?.value;
+    const qty = parseFloat(inputs[0]?.value) || 0;
+    const rate = parseFloat(inputs[1]?.value) || 0;
+    if (brand && qty > 0 && rate > 0) {
+      const amt = qty * rate;
+      grandTotal += amt;
+      items.push({ label: `🔩 ${brand} ${size}`, detail: `${qty} ton × ₹${rate}`, amount: amt });
+    }
+  });
 
   // Addons
   document.querySelectorAll(".addon-card").forEach(card => {
@@ -264,35 +240,31 @@ function collectOrderData() {
 
   // Cement items
   const cement = [];
-  if (cementEnabled) {
-    document.querySelectorAll("[id^='cement-']").forEach(row => {
-      const selects = row.querySelectorAll("select");
-      const inputs = row.querySelectorAll("input[type='number']");
-      const brand = selects[0]?.value;
-      const type = selects[1]?.value;
-      const qty = parseFloat(inputs[0]?.value) || 0;
-      const rate = parseFloat(inputs[1]?.value) || 0;
-      if (brand && type && qty > 0 && rate > 0) {
-        cement.push({ brand, type, qty, rate });
-      }
-    });
-  }
+  document.querySelectorAll("[id^='cement-']").forEach(row => {
+    const selects = row.querySelectorAll("select");
+    const inputs = row.querySelectorAll("input[type='number']");
+    const brand = selects[0]?.value;
+    const type = selects[1]?.value;
+    const qty = parseFloat(inputs[0]?.value) || 0;
+    const rate = parseFloat(inputs[1]?.value) || 0;
+    if (brand && type && qty > 0 && rate > 0) {
+      cement.push({ brand, type, qty, rate });
+    }
+  });
 
   // Steel items
   const steel = [];
-  if (steelEnabled) {
-    document.querySelectorAll("[id^='steel-']").forEach(row => {
-      const selects = row.querySelectorAll("select");
-      const inputs = row.querySelectorAll("input[type='number']");
-      const brand = selects[0]?.value;
-      const size = selects[1]?.value;
-      const qty = parseFloat(inputs[0]?.value) || 0;
-      const rate = parseFloat(inputs[1]?.value) || 0;
-      if (brand && size && qty > 0 && rate > 0) {
-        steel.push({ brand, size, qty, rate });
-      }
-    });
-  }
+  document.querySelectorAll("[id^='steel-']").forEach(row => {
+    const selects = row.querySelectorAll("select");
+    const inputs = row.querySelectorAll("input[type='number']");
+    const brand = selects[0]?.value;
+    const size = selects[1]?.value;
+    const qty = parseFloat(inputs[0]?.value) || 0;
+    const rate = parseFloat(inputs[1]?.value) || 0;
+    if (brand && size && qty > 0 && rate > 0) {
+      steel.push({ brand, size, qty, rate });
+    }
+  });
 
   // Addons
   const addonsCards = document.querySelectorAll(".addon-card");
@@ -370,18 +342,14 @@ function resetForm() {
   });
 
   // Reset cement
-  cementEnabled = false;
-  document.getElementById("cementToggle").classList.remove("active");
-  document.getElementById("cementItems").classList.remove("visible");
   document.getElementById("cementItemsList").innerHTML = "";
   cementItems = [];
+  addCementRow();
 
   // Reset steel
-  steelEnabled = false;
-  document.getElementById("steelToggle").classList.remove("active");
-  document.getElementById("steelItems").classList.remove("visible");
   document.getElementById("steelItemsList").innerHTML = "";
   steelItems = [];
+  addSteelRow();
 
   // Reset addons
   document.querySelectorAll(".addon-card input").forEach(i => { i.value = ""; });
