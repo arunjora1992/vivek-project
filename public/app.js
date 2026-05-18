@@ -359,6 +359,14 @@ function downloadOrderPdf(id) {
   window.open(`${API_BASE}/api/orders/${encodeURIComponent(id)}/pdf`, "_blank");
 }
 
+function downloadHistoryCsv() {
+  window.open(`${API_BASE}/api/orders/export.csv`, "_blank");
+}
+
+function downloadHistoryPdf() {
+  window.open(`${API_BASE}/api/orders/export.pdf`, "_blank");
+}
+
 function resetForm() {
   document.getElementById("partyName").value = "";
   document.getElementById("mobile").value = "";

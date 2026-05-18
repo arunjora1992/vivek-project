@@ -43,6 +43,8 @@ Construction-materials ordering app (cement, steel, add-ons) with a marketplace-
 | GET    | `/api/orders`              | List the 50 most recent orders                |
 | GET    | `/api/orders/:id`          | Fetch one order with its line items           |
 | GET    | `/api/orders/:id/pdf`      | Download the order as a PDF                   |
+| GET    | `/api/orders/export.csv`   | Download the entire order history as CSV      |
+| GET    | `/api/orders/export.pdf`   | Download the entire order history as a PDF report |
 
 `POST /api/orders` body:
 
@@ -131,6 +133,13 @@ Each saved order can be downloaded as a PDF:
 - **After submitting** — the "Download Last Order as PDF" button appears.
 - **From history** — open the 📋 history panel and click "Download PDF" on any row.
 - **Directly** — `GET /api/orders/:id/pdf` returns a `Content-Disposition: attachment` PDF.
+
+### Bulk export
+
+From the history panel, "Export CSV" and "Export PDF" download the **entire order history**:
+
+- **CSV** (`/api/orders/export.csv`) — one row per order with id, timestamps, party, mobile, delivery date/time, priorities, notes, grand total, and per-section line counts. UTF-8 BOM included so Excel renders ₹ correctly.
+- **PDF** (`/api/orders/export.pdf`) — landscape A4 tabular report with auto-pagination and a grand-total of grand-totals at the end.
 
 The PDF includes party details, delivery schedule, priority, cement/steel/add-on line items, notes, and the grand total.
 
