@@ -5,6 +5,23 @@ const PDFDocument = require("pdfkit");
 const { Pool } = require("pg");
 
 const PORT = process.env.PORT || 3000;
+const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL || "";
+
+async function forwardToGoogleSheet(payload) {
+  if (!GOOGLE_APPS_SCRIPT_URL) return;
+  try {
+    const r = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      console.warn(`[sheets] non-OK response: ${r.status}`);
+    }
+  } catch (err) {
+    console.warn(`[sheets] forward failed: ${err.message}`);
+  }
+}
 
 const pool = new Pool({
   host: process.env.PGHOST || "db",
@@ -90,6 +107,9 @@ app.post("/api/orders", async (req, res) => {
     }
 
     await client.query("COMMIT");
+
+    forwardToGoogleSheet({ ...order, id, grandTotal });
+
     res.json({ id, grandTotal });
   } catch (e) {
     await client.query("ROLLBACK");
