@@ -101,6 +101,103 @@ GOOGLE_APPS_SCRIPT_URL="" docker compose up --build
 > docker compose up --build
 > ```
 
+## Deploy with Docker Desktop (Windows / macOS)
+
+Step-by-step setup for someone running the project on Docker Desktop:
+
+### 1. Install Docker Desktop
+
+- Download from <https://www.docker.com/products/docker-desktop/> and install for your OS.
+- Launch Docker Desktop and wait until the whale icon in the tray/menu bar shows **"Engine running"**.
+- Verify from a terminal (PowerShell, Command Prompt, Terminal, or iTerm):
+  ```bash
+  docker --version
+  docker compose version
+  ```
+
+### 2. Get the code
+
+```bash
+git clone git@github.com:arunjora1992/vivek-project.git
+cd vivek-project
+```
+
+> Don't have SSH set up with GitHub? Use HTTPS instead:
+> `git clone https://github.com/arunjora1992/vivek-project.git`
+
+### 3. (Optional) Configure shop letterhead + Google Sheets
+
+Copy the example env file and edit the values you care about (shop name, GSTIN, phone, address, optional Apps Script URL):
+
+```bash
+cp .env.example .env
+# then edit .env in any editor
+```
+
+Docker Compose picks up `.env` automatically. Skip this step if you're fine with the defaults.
+
+### 4. Build and start the stack
+
+```bash
+docker compose up --build -d
+```
+
+What this does:
+
+- Builds two images: `skt-db` (Postgres 16 with `init.sql` baked in) and `skt-app` (Node 20 + Express).
+- Starts both containers in the background (`-d`).
+- The `db` service runs the schema on first start; the `app` service waits until the DB healthcheck passes, then applies the idempotent `delivered` / `gst_number` column migrations.
+
+You'll see the new containers in Docker Desktop under **Containers** → **vivek-project** (compose project name). Expand the project to see `skt-db` and `skt-app` running.
+
+### 5. Open the app
+
+<http://localhost:3000>
+
+API health probe: <http://localhost:3000/api/health> should return `{"status":"ok"}`.
+
+### 6. (Optional) Seed demo orders
+
+With the stack running:
+
+```bash
+# macOS / Linux / WSL
+./scripts/seed-orders.sh
+
+# Windows PowerShell — run via the running app container instead:
+docker compose exec app sh -c 'apk add --no-cache bash >/dev/null 2>&1 || true'
+docker compose cp scripts/seed-orders.sh app:/tmp/seed.sh
+docker compose exec app sh /tmp/seed.sh http://localhost:3000
+```
+
+Six demo orders appear in the history panel; two are pre-marked as Delivered.
+
+### 7. Day-to-day commands
+
+| Action                                   | Command                                            |
+| ---------------------------------------- | -------------------------------------------------- |
+| Tail logs (both services)                | `docker compose logs -f`                           |
+| Tail just the app                        | `docker compose logs -f app`                       |
+| Restart after code changes               | `docker compose up --build -d`                     |
+| Stop the stack (keeps the DB volume)     | `docker compose stop`                              |
+| Stop and remove containers (keeps data)  | `docker compose down`                              |
+| Wipe everything incl. DB data            | `docker compose down -v`                           |
+| psql shell into Postgres                 | `docker compose exec db psql -U skt -d skt_orders` |
+| Shell into the app container             | `docker compose exec app sh`                       |
+
+All of these are also available as buttons in Docker Desktop:
+
+- **Containers tab** → click the project → use the ▶ / ⏹ / 🗑 controls.
+- **Containers tab** → click a container → **Logs** / **Exec** / **Files** tabs.
+- **Volumes tab** → find `vivek-project_skt_pgdata` → use 🗑 to wipe DB data.
+
+### 8. Troubleshooting
+
+- **Port 3000 or 5432 already in use** — another app on your machine is bound to those ports. Either stop that app, or change the host-side port in `docker-compose.yml` (e.g. `"3001:3000"`) and reopen the app on the new port.
+- **App container restarts in a loop with a DB error** — open `docker compose logs db`; if you see "Permission denied" on `init.sql`, rebuild the DB image with `docker compose build db`. (The repo already bakes the file into the image to avoid host-permission issues.)
+- **`docker compose down -v` warning** — confirms you're wiping the Postgres volume. Only do this if you don't need the saved orders.
+- **WSL 2 errors on Windows** — Docker Desktop needs WSL 2 enabled. Open Docker Desktop → Settings → General → "Use the WSL 2 based engine" should be on, then restart Docker Desktop.
+
 ## Local dev (without Docker)
 
 Requires Node 20+ and a running PostgreSQL with the schema loaded.
