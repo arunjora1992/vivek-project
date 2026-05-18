@@ -21,10 +21,82 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPriorityChips();
   setupMaterialToggles();
   setupAddons();
+  setupValidationListeners();
+  setupHistoryFilters();
   setDefaultDateTime();
   syncThemeButton();
   renderSummary();
 });
+
+// ─── VALIDATION ───
+const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{1}[Z]{1}[A-Z0-9]{1}$/;
+
+function setFieldError(id, message) {
+  const errEl = document.getElementById(`error-${id}`);
+  const inputEl = document.getElementById(id);
+  if (errEl) errEl.textContent = message || "";
+  if (inputEl) inputEl.classList.toggle("has-error", !!message);
+  return !message;
+}
+
+function clearAllErrors() {
+  document.querySelectorAll(".field-error").forEach(el => (el.textContent = ""));
+  document.querySelectorAll(".has-error").forEach(el => el.classList.remove("has-error"));
+  document.querySelectorAll(".priority-group.has-error").forEach(el => el.classList.remove("has-error"));
+}
+
+function validateField(id) {
+  const el = document.getElementById(id);
+  if (!el) return true;
+  const v = (el.value || "").trim();
+  switch (id) {
+    case "partyName":
+      return setFieldError(id, v ? "" : "Party name is required");
+    case "mobile":
+      if (!v) return setFieldError(id, "Mobile is required");
+      if (!/^\d{10}$/.test(v)) return setFieldError(id, "Enter a 10-digit mobile number");
+      return setFieldError(id, "");
+    case "address":
+      return setFieldError(id, v ? "" : "Delivery address is required");
+    case "deliveryDate":
+      return setFieldError(id, v ? "" : "Delivery date is required");
+    case "gstNumber":
+      if (!v) return setFieldError(id, "");
+      return setFieldError(id, GSTIN_RE.test(v.toUpperCase()) ? "" : "Invalid GSTIN format (15 chars, e.g. 33ABCDE1234F1Z5)");
+    default:
+      return true;
+  }
+}
+
+function setupValidationListeners() {
+  ["partyName", "mobile", "address", "deliveryDate", "gstNumber"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("blur", () => validateField(id));
+    el.addEventListener("input", () => {
+      if (el.classList.contains("has-error")) validateField(id);
+    });
+  });
+}
+
+function validateAll() {
+  clearAllErrors();
+  let ok = true;
+  ok = validateField("partyName") && ok;
+  ok = validateField("mobile") && ok;
+  ok = validateField("address") && ok;
+  ok = validateField("deliveryDate") && ok;
+  ok = validateField("gstNumber") && ok;
+
+  const priorities = Array.from(document.querySelectorAll(".priority-chip.active")).length;
+  if (!priorities) {
+    setFieldError("priorities", "Select at least one priority");
+    document.querySelector(".priority-group")?.classList.add("has-error");
+    ok = false;
+  }
+
+  return ok;
+}
 
 // ─── THEME ───
 function syncThemeButton() {
@@ -251,23 +323,28 @@ function renderSummary() {
 }
 
 function collectOrderData() {
+  const formErrEl = document.getElementById("error-form");
+  if (formErrEl) formErrEl.textContent = "";
+
+  if (!validateAll()) {
+    if (formErrEl) formErrEl.textContent = "Please fix the highlighted fields above.";
+    const firstErr = document.querySelector(".has-error, .priority-group.has-error");
+    firstErr?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return null;
+  }
+
   const party = document.getElementById("partyName").value.trim();
   const mobile = document.getElementById("mobile").value.trim();
   const address = document.getElementById("address").value.trim();
   const deliveryDate = document.getElementById("deliveryDate").value;
   const deliveryTime = document.getElementById("deliveryTime").value;
   const notes = document.getElementById("notes").value.trim();
+  const gstNumber = (document.getElementById("gstNumber")?.value || "").trim().toUpperCase();
 
   const priorities = [];
   document.querySelectorAll(".priority-chip.active").forEach(chip => {
     priorities.push(chip.dataset.value);
   });
-
-  if (!party) { showToast("Please enter Party Name", "error"); return null; }
-  if (!mobile || mobile.length < 10) { showToast("Please enter valid Mobile number", "error"); return null; }
-  if (!address) { showToast("Please enter Address", "error"); return null; }
-  if (!deliveryDate) { showToast("Please select Delivery Date", "error"); return null; }
-  if (priorities.length === 0) { showToast("Please select at least one Priority", "error"); return null; }
 
   const cement = [];
   if (cementEnabled) {
@@ -307,13 +384,14 @@ function collectOrderData() {
   });
 
   if (cement.length === 0 && steel.length === 0) {
-    showToast("Please add at least one Cement or Steel item", "error");
+    if (formErrEl) formErrEl.textContent = "Add at least one Cement or Steel item before submitting.";
+    formErrEl?.scrollIntoView({ behavior: "smooth", block: "center" });
     return null;
   }
 
   return {
     id: "SKT-" + Date.now(),
-    party, mobile, address, deliveryDate, deliveryTime,
+    party, mobile, address, gstNumber, deliveryDate, deliveryTime,
     priorities, cement, steel, addons, notes
   };
 }
@@ -359,12 +437,23 @@ function downloadOrderPdf(id) {
   window.open(`${API_BASE}/api/orders/${encodeURIComponent(id)}/pdf`, "_blank");
 }
 
+function historyFilterQuery() {
+  const params = new URLSearchParams();
+  if (historyFilterState.q) params.set("q", historyFilterState.q);
+  if (historyFilterState.status && historyFilterState.status !== "all")
+    params.set("status", historyFilterState.status);
+  if (historyFilterState.from) params.set("from", historyFilterState.from);
+  if (historyFilterState.to)   params.set("to",   historyFilterState.to);
+  const s = params.toString();
+  return s ? `?${s}` : "";
+}
+
 function downloadHistoryCsv() {
-  window.open(`${API_BASE}/api/orders/export.csv`, "_blank");
+  window.open(`${API_BASE}/api/orders/export.csv${historyFilterQuery()}`, "_blank");
 }
 
 function downloadHistoryPdf() {
-  window.open(`${API_BASE}/api/orders/export.pdf`, "_blank");
+  window.open(`${API_BASE}/api/orders/export.pdf${historyFilterQuery()}`, "_blank");
 }
 
 async function toggleDelivered(id, checked) {
@@ -403,9 +492,13 @@ async function toggleDelivered(id, checked) {
 }
 
 function resetForm() {
+  clearAllErrors();
+  const formErrEl = document.getElementById("error-form");
+  if (formErrEl) formErrEl.textContent = "";
   document.getElementById("partyName").value = "";
   document.getElementById("mobile").value = "";
   document.getElementById("address").value = "";
+  const gst = document.getElementById("gstNumber"); if (gst) gst.value = "";
   document.getElementById("notes").value = "";
 
   document.querySelectorAll(".priority-chip").forEach(chip => {
@@ -443,6 +536,52 @@ function showToast(message, type = "info") {
   setTimeout(() => { toast.style.opacity = "0"; toast.style.transform = "translateX(40px)"; toast.style.transition = "all 0.3s"; setTimeout(() => toast.remove(), 300); }, 4000);
 }
 
+let historyFilterState = { q: "", status: "all", from: "", to: "" };
+let historyDebounce = null;
+
+function setupHistoryFilters() {
+  const search = document.getElementById("historySearch");
+  const from = document.getElementById("historyFrom");
+  const to = document.getElementById("historyTo");
+
+  search?.addEventListener("input", () => {
+    historyFilterState.q = search.value.trim();
+    debouncedRenderHistory();
+  });
+  from?.addEventListener("change", () => {
+    historyFilterState.from = from.value;
+    renderHistory();
+  });
+  to?.addEventListener("change", () => {
+    historyFilterState.to = to.value;
+    renderHistory();
+  });
+  document.querySelectorAll(".filter-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      historyFilterState.status = chip.dataset.status;
+      renderHistory();
+    });
+  });
+}
+
+function debouncedRenderHistory() {
+  clearTimeout(historyDebounce);
+  historyDebounce = setTimeout(renderHistory, 250);
+}
+
+function clearHistoryFilters() {
+  historyFilterState = { q: "", status: "all", from: "", to: "" };
+  const s = document.getElementById("historySearch"); if (s) s.value = "";
+  const f = document.getElementById("historyFrom"); if (f) f.value = "";
+  const t = document.getElementById("historyTo"); if (t) t.value = "";
+  document.querySelectorAll(".filter-chip").forEach(c =>
+    c.classList.toggle("active", c.dataset.status === "all")
+  );
+  renderHistory();
+}
+
 async function toggleHistory() {
   const panel = document.getElementById("historyPanel");
   const backdrop = document.getElementById("historyBackdrop");
@@ -454,12 +593,30 @@ async function toggleHistory() {
 
 async function renderHistory() {
   const list = document.getElementById("historyList");
+  const summary = document.getElementById("historySummary");
   list.innerHTML = `<div class="empty-summary">Loading…</div>`;
+  if (summary) summary.textContent = "";
+
+  const params = new URLSearchParams();
+  if (historyFilterState.q) params.set("q", historyFilterState.q);
+  if (historyFilterState.status && historyFilterState.status !== "all")
+    params.set("status", historyFilterState.status);
+  if (historyFilterState.from) params.set("from", historyFilterState.from);
+  if (historyFilterState.to)   params.set("to",   historyFilterState.to);
+
   try {
-    const res = await fetch(`${API_BASE}/api/orders`);
+    const res = await fetch(`${API_BASE}/api/orders?${params.toString()}`);
     const orders = await res.json();
+
+    if (summary) {
+      const total = orders.reduce((s, o) => s + Number(o.grand_total || 0), 0);
+      const delivered = orders.filter(o => o.delivered).length;
+      summary.textContent =
+        `${orders.length} order${orders.length === 1 ? "" : "s"} • ${delivered} delivered • ₹${total.toLocaleString("en-IN")}`;
+    }
+
     if (!orders.length) {
-      list.innerHTML = `<div class="empty-summary">No orders yet</div>`;
+      list.innerHTML = `<div class="empty-summary">No orders match the filters</div>`;
       return;
     }
     list.innerHTML = orders.map(o => {

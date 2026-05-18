@@ -40,11 +40,11 @@ Construction-materials ordering app (cement, steel, add-ons) with a marketplace-
 | ------ | -------------------------- | --------------------------------------------- |
 | GET    | `/api/health`              | Liveness + DB ping                            |
 | POST   | `/api/orders`              | Save an order; also forwards to Google Sheets if configured |
-| GET    | `/api/orders`              | List the 50 most recent orders                |
+| GET    | `/api/orders`              | List orders. Query: `q`, `status=pending\|delivered`, `from=YYYY-MM-DD`, `to=YYYY-MM-DD`, `limit` (default 100, max 500) |
 | GET    | `/api/orders/:id`          | Fetch one order with its line items           |
-| GET    | `/api/orders/:id/pdf`      | Download the order as a PDF                   |
-| GET    | `/api/orders/export.csv`   | Download the entire order history as CSV      |
-| GET    | `/api/orders/export.pdf`   | Download the entire order history as a PDF report |
+| GET    | `/api/orders/:id/pdf`      | Download the order as a PDF. Query `copy=office\|party\|both` (default `both`) |
+| GET    | `/api/orders/export.csv`   | Bulk CSV export (respects the same filter query params as `/api/orders`) |
+| GET    | `/api/orders/export.pdf`   | Bulk PDF report (respects the same filter query params)               |
 | PATCH  | `/api/orders/:id/delivered`| Mark an order as delivered / not delivered (`{ "delivered": true }`) |
 
 `POST /api/orders` body:
@@ -126,6 +126,12 @@ Open <http://localhost:3000>.
 | `PGPASSWORD`              | `skt`       | Postgres password                         |
 | `PGDATABASE`              | `skt_orders`| Postgres database                         |
 | `GOOGLE_APPS_SCRIPT_URL`  | _(unset)_   | If set, every saved order is also POSTed there (best-effort, non-blocking) |
+| `SHOP_NAME`               | `SKT Order Book` | Letterhead — shop / business name             |
+| `SHOP_TAGLINE`            | `Construction Materials — Cement & Steel` | Letterhead tagline |
+| `SHOP_ADDRESS`            | `—`         | Letterhead address                            |
+| `SHOP_PHONE`              | `—`         | Letterhead phone                              |
+| `SHOP_EMAIL`              | _(unset)_   | Letterhead email                              |
+| `SHOP_GSTIN`              | _(unset)_   | Shop GSTIN printed on PDFs                    |
 
 ## PDF export
 
@@ -134,6 +140,15 @@ Each saved order can be downloaded as a PDF:
 - **After submitting** — the "Download Last Order as PDF" button appears.
 - **From history** — open the 📋 history panel and click "Download PDF" on any row.
 - **Directly** — `GET /api/orders/:id/pdf` returns a `Content-Disposition: attachment` PDF.
+- **Letterhead** — each PDF carries a branded header (blue banner, yellow logo tile, shop name/tagline, address/phone/email/GSTIN) configured via the `SHOP_*` env vars. By default the endpoint returns **two pages — Office Copy then Party Copy**. Use `?copy=office` or `?copy=party` to fetch just one.
+
+### Search + filter in history
+
+The history panel has a search box (party / mobile / order ID), a Pending/Delivered chip filter, and a date range. Filters are applied server-side via `GET /api/orders` query params (`q`, `status`, `from`, `to`) — the bulk **Export CSV / PDF** buttons reuse the same filters, so you can download exactly the slice you're viewing.
+
+### Inline validation
+
+Required fields highlight with a red border and a per-field message instead of toast-only errors. The Party GSTIN field validates against the 15-character GSTIN pattern when filled.
 
 ### Bulk export
 

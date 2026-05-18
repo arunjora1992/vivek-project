@@ -7,6 +7,15 @@ const { Pool } = require("pg");
 const PORT = process.env.PORT || 3000;
 const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL || "";
 
+const SHOP = {
+  name:    process.env.SHOP_NAME    || "SKT Order Book",
+  tagline: process.env.SHOP_TAGLINE || "Construction Materials – Cement & Steel",
+  address: process.env.SHOP_ADDRESS || "—",
+  phone:   process.env.SHOP_PHONE   || "—",
+  email:   process.env.SHOP_EMAIL   || "",
+  gstin:   process.env.SHOP_GSTIN   || "",
+};
+
 async function forwardToGoogleSheet(payload) {
   if (!GOOGLE_APPS_SCRIPT_URL) return;
   try {
@@ -41,7 +50,8 @@ async function runStartupMigrations() {
   await pool.query(`
     ALTER TABLE orders
       ADD COLUMN IF NOT EXISTS delivered    BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ
+      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS gst_number   TEXT
   `);
 }
 
@@ -77,8 +87,8 @@ app.post("/api/orders", async (req, res) => {
     await client.query("BEGIN");
 
     await client.query(
-      `INSERT INTO orders (id, party_name, mobile, address, delivery_date, delivery_time, priorities, notes, grand_total, raw)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO orders (id, party_name, mobile, address, delivery_date, delivery_time, priorities, notes, grand_total, gst_number, raw)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         id,
         order.party,
@@ -89,6 +99,7 @@ app.post("/api/orders", async (req, res) => {
         order.priorities || [],
         order.notes || null,
         grandTotal,
+        order.gstNumber || null,
         order,
       ]
     );
@@ -128,13 +139,34 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
-app.get("/api/orders", async (_req, res) => {
+app.get("/api/orders", async (req, res) => {
   try {
-    const r = await pool.query(
+    const { q, status, from, to } = req.query;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+
+    const where = [];
+    const params = [];
+
+    if (q && String(q).trim()) {
+      params.push(`%${String(q).trim()}%`);
+      const i = params.length;
+      where.push(`(party_name ILIKE $${i} OR mobile ILIKE $${i} OR id ILIKE $${i})`);
+    }
+    if (status === "delivered") where.push("delivered = TRUE");
+    else if (status === "pending") where.push("delivered = FALSE");
+
+    if (from) { params.push(from); where.push(`delivery_date >= $${params.length}`); }
+    if (to)   { params.push(to);   where.push(`delivery_date <= $${params.length}`); }
+
+    const sql =
       `SELECT id, created_at, party_name, mobile, delivery_date, delivery_time,
-              grand_total, delivered, delivered_at
-       FROM orders ORDER BY created_at DESC LIMIT 50`
-    );
+              grand_total, delivered, delivered_at, gst_number
+       FROM orders
+       ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       ORDER BY created_at DESC
+       LIMIT ${limit}`;
+
+    const r = await pool.query(sql, params);
     res.json(r.rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -147,17 +179,36 @@ function csvEscape(v) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-app.get("/api/orders/export.csv", async (_req, res) => {
+function buildOrdersFilter(req) {
+  const { q, status, from, to } = req.query;
+  const where = [];
+  const params = [];
+  if (q && String(q).trim()) {
+    params.push(`%${String(q).trim()}%`);
+    const i = params.length;
+    where.push(`(party_name ILIKE $${i} OR mobile ILIKE $${i} OR id ILIKE $${i})`);
+  }
+  if (status === "delivered") where.push("delivered = TRUE");
+  else if (status === "pending") where.push("delivered = FALSE");
+  if (from) { params.push(from); where.push(`delivery_date >= $${params.length}`); }
+  if (to)   { params.push(to);   where.push(`delivery_date <= $${params.length}`); }
+  return { whereSql: where.length ? "WHERE " + where.join(" AND ") : "", params };
+}
+
+app.get("/api/orders/export.csv", async (req, res) => {
   try {
+    const { whereSql, params } = buildOrdersFilter(req);
     const r = await pool.query(
       `SELECT o.id, o.created_at, o.party_name, o.mobile, o.address,
               o.delivery_date, o.delivery_time, o.priorities, o.notes, o.grand_total,
-              o.delivered, o.delivered_at,
+              o.delivered, o.delivered_at, o.gst_number,
               COALESCE((SELECT COUNT(*) FROM order_cement c WHERE c.order_id = o.id), 0) AS cement_lines,
               COALESCE((SELECT COUNT(*) FROM order_steel s  WHERE s.order_id = o.id), 0) AS steel_lines,
               COALESCE((SELECT COUNT(*) FROM order_addons a WHERE a.order_id = o.id), 0) AS addon_lines
        FROM orders o
-       ORDER BY o.created_at DESC`
+       ${whereSql}
+       ORDER BY o.created_at DESC`,
+      params
     );
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -167,7 +218,7 @@ app.get("/api/orders/export.csv", async (_req, res) => {
     );
 
     const headers = [
-      "id", "created_at", "party_name", "mobile", "address",
+      "id", "created_at", "party_name", "mobile", "address", "gst_number",
       "delivery_date", "delivery_time", "priorities", "notes",
       "grand_total", "status", "delivered_at",
       "cement_lines", "steel_lines", "addon_lines"
@@ -181,6 +232,7 @@ app.get("/api/orders/export.csv", async (_req, res) => {
         csvEscape(row.party_name),
         csvEscape(row.mobile),
         csvEscape(row.address),
+        csvEscape(row.gst_number),
         csvEscape(row.delivery_date instanceof Date ? row.delivery_date.toISOString().slice(0, 10) : row.delivery_date),
         csvEscape(row.delivery_time),
         csvEscape((row.priorities || []).join("|")),
@@ -200,12 +252,14 @@ app.get("/api/orders/export.csv", async (_req, res) => {
   }
 });
 
-app.get("/api/orders/export.pdf", async (_req, res) => {
+app.get("/api/orders/export.pdf", async (req, res) => {
   try {
+    const { whereSql, params } = buildOrdersFilter(req);
     const r = await pool.query(
       `SELECT id, created_at, party_name, mobile, delivery_date, delivery_time,
               priorities, grand_total, delivered, delivered_at
-       FROM orders ORDER BY created_at DESC`
+       FROM orders ${whereSql} ORDER BY created_at DESC`,
+      params
     );
 
     res.setHeader("Content-Type", "application/pdf");
@@ -217,11 +271,12 @@ app.get("/api/orders/export.pdf", async (_req, res) => {
     const doc = new PDFDocument({ margin: 40, size: "A4", layout: "landscape" });
     doc.pipe(res);
 
-    doc.fontSize(18).text("SKT Order Book — Order History", { align: "center" });
-    doc.fontSize(10).fillColor("#666")
-      .text(`Generated: ${new Date().toLocaleString("en-IN")}`, { align: "center" })
-      .text(`Total orders: ${r.rows.length}`, { align: "center" });
-    doc.moveDown();
+    drawLetterhead(doc, "Order History Report");
+    doc.moveDown(0.2);
+    doc.font("Helvetica").fontSize(10).fillColor("#545454")
+      .text(`Generated: ${new Date().toLocaleString("en-IN")}`)
+      .text(`Total orders: ${r.rows.length}`);
+    doc.moveDown(0.5);
     doc.fillColor("#000");
 
     const cols = [
@@ -340,89 +395,190 @@ app.get("/api/orders/:id", async (req, res) => {
   }
 });
 
+function drawLetterhead(doc, label) {
+  const pageW = doc.page.width;
+  const margin = doc.page.margins.left;
+  const innerW = pageW - margin * 2;
+
+  doc.save();
+  doc.rect(margin, margin, innerW, 70).fill("#2874F0");
+  doc.fillColor("#FFC200").rect(margin, margin + 70, innerW, 4).fill();
+  doc.restore();
+
+  doc.save();
+  doc.fillColor("#FFC200").rect(margin + 10, margin + 12, 46, 46).fill();
+  doc.fillColor("#131921").fontSize(28).font("Helvetica-Bold")
+    .text("S", margin + 22, margin + 18, { lineBreak: false });
+  doc.restore();
+
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(18)
+    .text(SHOP.name, margin + 66, margin + 14, { lineBreak: false });
+  doc.font("Helvetica").fontSize(10).fillColor("#E3F2FD")
+    .text(SHOP.tagline, margin + 66, margin + 36, { lineBreak: false });
+
+  const rightX = margin + innerW - 200;
+  doc.font("Helvetica").fontSize(9).fillColor("#ffffff");
+  doc.text(SHOP.address, rightX, margin + 12, { width: 200, align: "right" });
+  const phoneEmail = [SHOP.phone, SHOP.email].filter(Boolean).join("  |  ");
+  if (phoneEmail) doc.text(phoneEmail, rightX, margin + 36, { width: 200, align: "right" });
+  if (SHOP.gstin) doc.text(`GSTIN: ${SHOP.gstin}`, rightX, margin + 50, { width: 200, align: "right" });
+
+  doc.fillColor("#000");
+  doc.y = margin + 90;
+
+  if (label) {
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("#FB641B")
+      .text(label.toUpperCase(), { align: "right" });
+    doc.fillColor("#000");
+    doc.moveDown(0.3);
+  }
+}
+
+function drawFooter(doc) {
+  const pageW = doc.page.width;
+  const pageH = doc.page.height;
+  const margin = doc.page.margins.left;
+  doc.save();
+  doc.fontSize(8).fillColor("#878787")
+    .text(
+      `${SHOP.name} • Computer-generated document • ${new Date().toLocaleString("en-IN")}`,
+      margin,
+      pageH - 30,
+      { width: pageW - margin * 2, align: "center" }
+    );
+  doc.restore();
+}
+
+function drawOrderPage(doc, order, label) {
+  drawLetterhead(doc, label);
+
+  doc.moveDown(0.4);
+  doc.font("Helvetica-Bold").fontSize(14).text("Order Receipt");
+  doc.moveDown(0.2);
+  doc.font("Helvetica").fontSize(10).fillColor("#545454");
+  doc.text(`Order ID: ${order.id}`);
+  doc.text(`Created: ${new Date(order.created_at).toLocaleString("en-IN")}`);
+  doc.text(`Status: ${order.delivered ? "Delivered" : "Pending"}${order.delivered && order.delivered_at ? "  (" + new Date(order.delivered_at).toLocaleString("en-IN") + ")" : ""}`);
+  doc.fillColor("#000");
+  doc.moveDown(0.6);
+
+  doc.font("Helvetica-Bold").fontSize(11).text("Party Details");
+  doc.font("Helvetica").fontSize(10)
+    .text(`Name: ${order.party_name}`)
+    .text(`Mobile: ${order.mobile}`)
+    .text(`Address: ${order.address}`);
+  if (order.gst_number) doc.text(`Party GSTIN: ${order.gst_number}`);
+  doc.moveDown(0.4);
+
+  doc.font("Helvetica-Bold").fontSize(11).text("Delivery");
+  doc.font("Helvetica").fontSize(10)
+    .text(`Date: ${new Date(order.delivery_date).toLocaleDateString("en-IN")}`)
+    .text(`Time: ${order.delivery_time || "-"}`)
+    .text(`Priority: ${(order.priorities || []).join(", ") || "-"}`);
+  doc.moveDown(0.6);
+
+  let grand = 0;
+  const rowsToDraw = [];
+  (order.cement || []).forEach(c => rowsToDraw.push({
+    item: `Cement — ${c.brand} ${c.type}`,
+    qty: Number(c.qty),
+    unit: "Bags",
+    rate: Number(c.rate),
+  }));
+  (order.steel || []).forEach(s => rowsToDraw.push({
+    item: `Steel — ${s.brand} ${s.size}`,
+    qty: Number(s.qty),
+    unit: "Ton",
+    rate: Number(s.rate),
+  }));
+  (order.addons || []).forEach(a => rowsToDraw.push({
+    item: `Add-on — ${a.addon_name}`,
+    qty: Number(a.qty),
+    unit: "Nos",
+    rate: Number(a.rate),
+  }));
+
+  const tableX = doc.page.margins.left;
+  const tableW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const colW = [tableW - 270, 60, 50, 80, 80];
+  let y = doc.y;
+
+  doc.save();
+  doc.rect(tableX, y, tableW, 20).fill("#F1F3F6");
+  doc.fillColor("#212121").font("Helvetica-Bold").fontSize(10);
+  doc.text("Item",       tableX + 6,                                y + 5, { width: colW[0] - 12 });
+  doc.text("Qty",        tableX + colW[0] + 6,                      y + 5, { width: colW[1] - 12, align: "right" });
+  doc.text("Unit",       tableX + colW[0] + colW[1] + 6,            y + 5, { width: colW[2] - 12 });
+  doc.text("Rate (₹)",   tableX + colW[0] + colW[1] + colW[2] + 6,  y + 5, { width: colW[3] - 12, align: "right" });
+  doc.text("Amount (₹)", tableX + colW[0] + colW[1] + colW[2] + colW[3] + 6, y + 5, { width: colW[4] - 12, align: "right" });
+  doc.restore();
+  y += 20;
+
+  doc.font("Helvetica").fontSize(10).fillColor("#212121");
+  rowsToDraw.forEach((r, i) => {
+    const amt = r.qty * r.rate;
+    grand += amt;
+    if (i % 2 === 1) {
+      doc.save(); doc.rect(tableX, y, tableW, 18).fill("#FAFAFA"); doc.restore();
+    }
+    doc.fillColor("#212121");
+    doc.text(r.item,                          tableX + 6,                                          y + 4, { width: colW[0] - 12, ellipsis: true, lineBreak: false });
+    doc.text(String(r.qty),                   tableX + colW[0] + 6,                                y + 4, { width: colW[1] - 12, align: "right" });
+    doc.text(r.unit,                          tableX + colW[0] + colW[1] + 6,                      y + 4, { width: colW[2] - 12 });
+    doc.text(r.rate.toFixed(2),               tableX + colW[0] + colW[1] + colW[2] + 6,            y + 4, { width: colW[3] - 12, align: "right" });
+    doc.text(amt.toFixed(2),                  tableX + colW[0] + colW[1] + colW[2] + colW[3] + 6,  y + 4, { width: colW[4] - 12, align: "right" });
+    y += 18;
+  });
+
+  doc.y = y + 8;
+  doc.moveTo(tableX, doc.y).lineTo(tableX + tableW, doc.y).strokeColor("#BDBDBD").stroke();
+  doc.moveDown(0.4);
+  doc.font("Helvetica-Bold").fontSize(13).fillColor("#388E3C")
+    .text(`Grand Total: ₹${grand.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, { align: "right" });
+  doc.fillColor("#000");
+
+  if (order.notes) {
+    doc.moveDown(0.6);
+    doc.font("Helvetica-Bold").fontSize(11).text("Notes");
+    doc.font("Helvetica").fontSize(10).text(order.notes);
+  }
+
+  doc.moveDown(2);
+  doc.font("Helvetica").fontSize(9).fillColor("#545454")
+    .text("Received in good condition.", { continued: false });
+  doc.moveDown(2);
+  const sigY = doc.y;
+  doc.moveTo(tableX, sigY).lineTo(tableX + 180, sigY).strokeColor("#BDBDBD").stroke();
+  doc.moveTo(tableX + tableW - 180, sigY).lineTo(tableX + tableW, sigY).stroke();
+  doc.fontSize(9).fillColor("#878787")
+    .text("Receiver Signature", tableX, sigY + 4)
+    .text("Authorised Signatory", tableX + tableW - 180, sigY + 4, { width: 180, align: "right" });
+  doc.fillColor("#000");
+
+  drawFooter(doc);
+}
+
 app.get("/api/orders/:id/pdf", async (req, res) => {
   try {
     const order = await loadOrder(req.params.id);
     if (!order) return res.status(404).json({ error: "Not found" });
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${order.id}.pdf"`
-    );
+    const copy = String(req.query.copy || "both").toLowerCase();
+    const copies =
+      copy === "office" ? ["Office Copy"] :
+      copy === "party"  ? ["Party Copy"]  :
+                          ["Office Copy", "Party Copy"];
 
-    const doc = new PDFDocument({ margin: 50, size: "A4" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${order.id}.pdf"`);
+
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
     doc.pipe(res);
 
-    doc.fontSize(20).text("SKT Order Book", { align: "center" });
-    doc.fontSize(11).fillColor("#666").text("Construction Materials Order", { align: "center" });
-    doc.moveDown();
-    doc.fillColor("#000");
-
-    doc.fontSize(12).text(`Order ID: ${order.id}`);
-    doc.text(`Created: ${new Date(order.created_at).toLocaleString("en-IN")}`);
-    doc.moveDown(0.5);
-
-    doc.fontSize(14).text("Party Details", { underline: true });
-    doc.fontSize(11)
-      .text(`Name: ${order.party_name}`)
-      .text(`Mobile: ${order.mobile}`)
-      .text(`Address: ${order.address}`);
-    doc.moveDown(0.5);
-
-    doc.fontSize(14).text("Delivery", { underline: true });
-    doc.fontSize(11)
-      .text(`Date: ${new Date(order.delivery_date).toLocaleDateString("en-IN")}`)
-      .text(`Time: ${order.delivery_time || "-"}`)
-      .text(`Priority: ${(order.priorities || []).join(", ") || "-"}`);
-    doc.moveDown(0.5);
-
-    let grand = 0;
-    const drawSection = (title, rows, cols) => {
-      if (!rows.length) return;
-      doc.fontSize(14).text(title, { underline: true });
-      doc.fontSize(11);
-      rows.forEach(r => {
-        const qty = Number(r.qty);
-        const rate = Number(r.rate);
-        const amt = qty * rate;
-        grand += amt;
-        const left = cols.map(c => `${c.label}: ${r[c.field]}`).join("  ");
-        doc.text(`${left}  Qty: ${qty}  Rate: ₹${rate}  Amount: ₹${amt.toFixed(2)}`);
-      });
-      doc.moveDown(0.5);
-    };
-
-    drawSection("Cement", order.cement, [
-      { label: "Brand", field: "brand" },
-      { label: "Type", field: "type" },
-    ]);
-    drawSection("Steel", order.steel, [
-      { label: "Brand", field: "brand" },
-      { label: "Size", field: "size" },
-    ]);
-
-    if (order.addons.length) {
-      doc.fontSize(14).text("Add-ons", { underline: true });
-      doc.fontSize(11);
-      order.addons.forEach(a => {
-        const qty = Number(a.qty);
-        const rate = Number(a.rate);
-        const amt = qty * rate;
-        grand += amt;
-        doc.text(`${a.addon_name}  Qty: ${qty}  Rate: ₹${rate}  Amount: ₹${amt.toFixed(2)}`);
-      });
-      doc.moveDown(0.5);
-    }
-
-    if (order.notes) {
-      doc.fontSize(14).text("Notes", { underline: true });
-      doc.fontSize(11).text(order.notes);
-      doc.moveDown(0.5);
-    }
-
-    doc.moveDown();
-    doc.fontSize(14).text(`Grand Total: ₹${grand.toFixed(2)}`, { align: "right" });
+    copies.forEach((label, i) => {
+      if (i > 0) doc.addPage();
+      drawOrderPage(doc, order, label);
+    });
 
     doc.end();
   } catch (e) {
