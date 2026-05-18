@@ -152,6 +152,7 @@ app.get("/api/orders/export.csv", async (_req, res) => {
     const r = await pool.query(
       `SELECT o.id, o.created_at, o.party_name, o.mobile, o.address,
               o.delivery_date, o.delivery_time, o.priorities, o.notes, o.grand_total,
+              o.delivered, o.delivered_at,
               COALESCE((SELECT COUNT(*) FROM order_cement c WHERE c.order_id = o.id), 0) AS cement_lines,
               COALESCE((SELECT COUNT(*) FROM order_steel s  WHERE s.order_id = o.id), 0) AS steel_lines,
               COALESCE((SELECT COUNT(*) FROM order_addons a WHERE a.order_id = o.id), 0) AS addon_lines
@@ -168,7 +169,8 @@ app.get("/api/orders/export.csv", async (_req, res) => {
     const headers = [
       "id", "created_at", "party_name", "mobile", "address",
       "delivery_date", "delivery_time", "priorities", "notes",
-      "grand_total", "cement_lines", "steel_lines", "addon_lines"
+      "grand_total", "status", "delivered_at",
+      "cement_lines", "steel_lines", "addon_lines"
     ];
     res.write("﻿"); // BOM so Excel picks up UTF-8
     res.write(headers.join(",") + "\n");
@@ -184,6 +186,8 @@ app.get("/api/orders/export.csv", async (_req, res) => {
         csvEscape((row.priorities || []).join("|")),
         csvEscape(row.notes),
         csvEscape(Number(row.grand_total).toFixed(2)),
+        csvEscape(row.delivered ? "Delivered" : "Pending"),
+        csvEscape(row.delivered_at ? new Date(row.delivered_at).toISOString() : ""),
         csvEscape(row.cement_lines),
         csvEscape(row.steel_lines),
         csvEscape(row.addon_lines),
@@ -199,7 +203,8 @@ app.get("/api/orders/export.csv", async (_req, res) => {
 app.get("/api/orders/export.pdf", async (_req, res) => {
   try {
     const r = await pool.query(
-      `SELECT id, created_at, party_name, mobile, delivery_date, delivery_time, priorities, grand_total
+      `SELECT id, created_at, party_name, mobile, delivery_date, delivery_time,
+              priorities, grand_total, delivered, delivered_at
        FROM orders ORDER BY created_at DESC`
     );
 
@@ -220,13 +225,14 @@ app.get("/api/orders/export.pdf", async (_req, res) => {
     doc.fillColor("#000");
 
     const cols = [
-      { label: "ID",       width: 95 },
-      { label: "Created",  width: 95 },
-      { label: "Party",    width: 110 },
-      { label: "Mobile",   width: 70 },
-      { label: "Delivery", width: 80 },
-      { label: "Priority", width: 80 },
-      { label: "Total (₹)", width: 80 },
+      { label: "ID",        width: 90 },
+      { label: "Created",   width: 75 },
+      { label: "Party",     width: 100 },
+      { label: "Mobile",    width: 65 },
+      { label: "Delivery",  width: 70 },
+      { label: "Priority",  width: 70 },
+      { label: "Status",    width: 70 },
+      { label: "Total (₹)", width: 70 },
     ];
     const startX = doc.x;
     let y = doc.y;
@@ -255,9 +261,12 @@ app.get("/api/orders/export.pdf", async (_req, res) => {
 
     drawRow(cols.map(c => c.label), { bold: true });
     let grand = 0;
+    let deliveredCount = 0;
+    let pendingCount = 0;
     for (const row of r.rows) {
       const total = Number(row.grand_total) || 0;
       grand += total;
+      if (row.delivered) deliveredCount++; else pendingCount++;
       drawRow([
         row.id,
         new Date(row.created_at).toLocaleDateString("en-IN"),
@@ -265,12 +274,15 @@ app.get("/api/orders/export.pdf", async (_req, res) => {
         row.mobile,
         new Date(row.delivery_date).toLocaleDateString("en-IN"),
         (row.priorities || []).join(", "),
+        row.delivered ? "Delivered" : "Pending",
         total.toFixed(2),
       ]);
     }
 
     doc.moveDown(2);
-    doc.font("Helvetica-Bold").fontSize(12)
+    doc.font("Helvetica-Bold").fontSize(11)
+      .text(`Delivered: ${deliveredCount}   |   Pending: ${pendingCount}`, { align: "right" });
+    doc.fontSize(12)
       .text(`Grand Total (all orders): ₹${grand.toFixed(2)}`, { align: "right" });
 
     doc.end();
